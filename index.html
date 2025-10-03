@@ -1,0 +1,589 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Pro Chat + Video + Assistant (Firebase + WebRTC)</title>
+
+  <!-- Bootstrap -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <style>
+    :root { --accent:#2563eb; --muted:#6b7280; }
+    body { background:#f4f7fb; font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,Arial; }
+    .app { max-width:1100px; margin:28px auto; }
+    .card { border-radius:12px; box-shadow:0 6px 20px rgba(18,38,63,0.06); }
+    .chat-window { height:56vh; overflow:auto; padding:18px; background:linear-gradient(#fff,#fbfdff); border-radius:10px; }
+    .message { display:flex; gap:12px; margin-bottom:12px; align-items:flex-end; }
+    .message.me { flex-direction:row-reverse; text-align:right; }
+    .bubble { max-width:72%; padding:10px 12px; border-radius:12px; background:#eef3ff; }
+    .bubble.me { background:var(--accent); color:#fff; }
+    .msg-img { max-width:260px; border-radius:8px; display:block; margin-top:8px; }
+    .thumb { width:44px; height:44px; border-radius:50%; object-fit:cover; }
+    .small-muted { color:var(--muted); font-size:13px; }
+    .timestamp { font-size:12px; color:#98a2b3; margin-top:6px; }
+  </style>
+</head>
+<body>
+  <div class="app container">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h4 class="m-0">Pro Chat — Video & Assistant</h4>
+      <div id="authArea"></div>
+    </div>
+
+    <div class="row g-3">
+      <!-- left -->
+      <div class="col-lg-4">
+        <div class="card p-3">
+          <label class="form-label small-muted">Search username</label>
+          <div class="input-group mb-2">
+            <input id="searchInput" class="form-control" placeholder="Search username or name..." />
+            <button id="searchBtn" class="btn btn-outline-secondary">Search</button>
+          </div>
+          <div id="searchResults" style="max-height:240px; overflow:auto;"></div>
+          <hr/>
+          <div class="mb-2 d-flex justify-content-between align-items-center">
+            <strong>Rooms</strong>
+            <small class="small-muted">Live</small>
+          </div>
+          <ul class="list-group mb-3" id="roomList">
+            <li class="list-group-item list-group-item-action" data-room="global"># Global</li>
+          </ul>
+
+          <hr/>
+          <div>
+            <strong>Online users</strong>
+            <div id="usersList" class="mt-2 small-muted"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- right -->
+      <div class="col-lg-8">
+        <div class="card p-3">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <div>
+              <h6 id="chatTitle" class="m-0"># Global</h6>
+              <div id="chatSubtitle" class="small-muted">Public room</div>
+            </div>
+            <div>
+              <button id="btnGlobal" class="btn btn-sm btn-outline-primary">Global</button>
+              <button id="startCallBtn" class="btn btn-sm btn-outline-success">Start Call</button>
+              <button id="joinCallBtn" class="btn btn-sm btn-outline-secondary">Join Call</button>
+            </div>
+          </div>
+
+          <div id="chatWindow" class="chat-window mb-3"></div>
+
+          <form id="messageForm" class="row gx-2 align-items-end">
+            <div class="col-md-7">
+              <input id="msgInput" class="form-control" placeholder="Type a message..." autocomplete="off" />
+            </div>
+            <div class="col-md-2">
+              <input id="msgImage" type="file" accept="image/*" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-3 d-grid">
+              <button id="sendBtn" class="btn btn-primary">Send</button>
+              <button id="assistantBtn" class="btn btn-outline-info mt-2">Ask Assistant</button>
+            </div>
+
+            <div class="col-12 mt-2">
+              <div id="uploadProgress" class="progress" style="height:8px; display:none;">
+                <div id="uploadBar" class="progress-bar" role="progressbar" style="width:0%">0%</div>
+              </div>
+              <div id="formStatus" class="small-muted mt-1"></div>
+            </div>
+          </form>
+
+          <hr/>
+          <div class="d-flex gap-2">
+            <video id="localVideo" autoplay playsinline muted style="width:220px; border-radius:8px; background:black"></video>
+            <video id="remoteVideo" autoplay playsinline style="width:220px; border-radius:8px; background:black"></video>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Firebase SDKs (modular) -->
+  <script type="module">
+    // ======= CONFIG - fill/verify =======
+    // Replace OPENAI_API_KEY with your own key (or route requests server-side)
+    const OPENAI_API_KEY = "PUT_YOUR_OPENAI_API_KEY_HERE";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyC9DP2UT4_KKlPIzMxNSY1_sDwmOKJ2T3s",
+      authDomain: "my-demo-63704.firebaseapp.com",
+      databaseURL: "https://my-demo-63704-default-rtdb.firebaseio.com",
+      projectId: "my-demo-63704",
+      storageBucket: "my-demo-63704.firebasestorage.app",
+      messagingSenderId: "309960709765",
+      appId: "1:309960709765:web:d095e3bc26459e9bc57bec",
+      measurementId: "G-C4B5GQLDME"
+    };
+
+    // ======= Imports =======
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+    import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+    import { getDatabase, ref as dbRef, set, push, onValue, get, update, remove, child } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
+    import { getStorage, ref as sRef, uploadBytesResumable, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js";
+
+    // ======= init =======
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getDatabase(app);
+    const storage = getStorage(app);
+
+    // ======= DOM =======
+    const authArea = document.getElementById('authArea');
+    const searchInput = document.getElementById('searchInput');
+    const searchBtn = document.getElementById('searchBtn');
+    const searchResults = document.getElementById('searchResults');
+    const usersList = document.getElementById('usersList');
+    const roomList = document.getElementById('roomList');
+    const chatWindow = document.getElementById('chatWindow');
+    const chatTitle = document.getElementById('chatTitle');
+    const chatSubtitle = document.getElementById('chatSubtitle');
+    const msgInput = document.getElementById('msgInput');
+    const msgImage = document.getElementById('msgImage');
+    const sendBtn = document.getElementById('sendBtn');
+    const assistantBtn = document.getElementById('assistantBtn');
+    const messageForm = document.getElementById('messageForm');
+    const uploadProgress = document.getElementById('uploadProgress');
+    const uploadBar = document.getElementById('uploadBar');
+    const formStatus = document.getElementById('formStatus');
+    const btnGlobal = document.getElementById('btnGlobal');
+    const startCallBtn = document.getElementById('startCallBtn');
+    const joinCallBtn = document.getElementById('joinCallBtn');
+
+    const localVideo = document.getElementById('localVideo');
+    const remoteVideo = document.getElementById('remoteVideo');
+
+    // ======= state =======
+    let currentUser = null;
+    let profile = null;
+    let usersCache = {};
+    let currentRoom = 'global';
+    let selectedFile = null;
+
+    // ======= helpers =======
+    function esc(s){ return s? String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[m])) : ''; }
+    function timeFmt(ts){ if(!ts) return ''; return new Date(ts).toLocaleString(); }
+
+    // ======= Auth UI & flows =======
+    function renderAuth() {
+      if (!currentUser) {
+        authArea.innerHTML = `<button id="btnSignIn" class="btn btn-outline-primary btn-sm">Sign in with Google</button>`;
+        document.getElementById('btnSignIn').onclick = signIn;
+      } else {
+        const name = currentUser.displayName || currentUser.email;
+        authArea.innerHTML = `
+          <div class="d-flex align-items-center">
+            <img src="${esc(currentUser.photoURL||'')}" class="thumb me-2" style="width:36px;height:36px">
+            <div class="me-3 text-end">
+              <div style="font-weight:600">${esc(name)}</div>
+              <div class="small-muted">@${esc(profile?.username||name.split(' ')[0])}</div>
+            </div>
+            <button id="btnSignOut" class="btn btn-outline-danger btn-sm">Sign out</button>
+          </div>`;
+        document.getElementById('btnSignOut').onclick = () => signOut(auth);
+      }
+    }
+
+    async function signIn(){
+      const provider = new GoogleAuthProvider();
+      try { await signInWithPopup(auth, provider); }
+      catch(e){ alert('Sign-in failed: ' + (e.message || e)); }
+    }
+
+    async function ensureProfile(user) {
+      const uRef = dbRef(db, 'users/' + user.uid);
+      const snap = await get(uRef);
+      const basic = {
+        uid: user.uid,
+        displayName: user.displayName || '',
+        email: user.email || '',
+        photoURL: user.photoURL || '',
+        username: ((user.displayName||user.email||'').split(' ')[0] || '').toLowerCase().replace(/[^a-z0-9_.-]/g,''),
+        updatedAt: Date.now()
+      };
+      if (!snap.exists()) {
+        await set(uRef, basic);
+        profile = basic;
+      } else {
+        const existing = snap.val();
+        profile = { ...existing, ...basic };
+        if (!existing.username) profile.username = basic.username;
+        await update(uRef, profile);
+      }
+      usersCache[user.uid] = profile;
+    }
+
+    // Listen users list for search and list
+    function listenUsers(){
+      const uRef = dbRef(db, 'users');
+      onValue(uRef, (snap) => {
+        usersCache = snap.val() || {};
+        renderUsers();
+      });
+    }
+
+    function renderUsers(){
+      const keys = Object.keys(usersCache || {});
+      usersList.innerHTML = keys.slice(0,100).map(uid => {
+        const u = usersCache[uid];
+        return `<div class="d-flex align-items-center justify-content-between mb-2">
+          <div class="d-flex align-items-center">
+            <img src="${esc(u.photoURL||'')}" class="thumb me-2" style="width:36px;height:36px;">
+            <div><div style="font-weight:600">${esc(u.displayName||'')}</div><div class="small-muted">@${esc(u.username||'')}</div></div>
+          </div>
+          <div><button class="btn btn-sm btn-outline-primary start-chat" data-uid="${esc(u.uid)}">Chat</button></div>
+        </div>`;
+      }).join('');
+      document.querySelectorAll('.start-chat').forEach(b => b.onclick = () => openPrivateChat(b.dataset.uid));
+    }
+
+    // Search
+    searchBtn.onclick = doSearch;
+    searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+    function doSearch(){
+      const q = (searchInput.value||'').trim().toLowerCase();
+      if (!q) { searchResults.innerHTML = '<div class="small-muted">Type username or name</div>'; return; }
+      const res = Object.values(usersCache || {}).filter(u => (u.username||'').toLowerCase().includes(q) || (u.displayName||'').toLowerCase().includes(q));
+      if (res.length === 0) { searchResults.innerHTML = '<div class="small-muted">No users found</div>'; return; }
+      searchResults.innerHTML = res.slice(0,20).map(u => `
+        <div class="d-flex justify-content-between align-items-center border rounded p-2 mb-2">
+          <div class="d-flex align-items-center">
+            <img src="${esc(u.photoURL||'')}" class="thumb me-2" style="width:40px;height:40px;">
+            <div><div style="font-weight:600">${esc(u.displayName||'')}</div><div class="small-muted">@${esc(u.username||'')}</div></div>
+          </div>
+          <div><button class="btn btn-sm btn-outline-primary start-chat" data-uid="${esc(u.uid)}">Chat</button></div>
+        </div>
+      `).join('');
+      document.querySelectorAll('.start-chat').forEach(b => b.onclick = () => openPrivateChat(b.dataset.uid));
+    }
+
+    // Rooms
+    btnGlobal.onclick = () => setRoom('global');
+    function setRoom(roomId){
+      currentRoom = roomId;
+      if (roomId === 'global') { chatTitle.innerText = '# Global'; chatSubtitle.innerText = 'Public room'; }
+      else {
+        const parts = roomId.split('_');
+        const otherUid = parts[0] === currentUser.uid ? parts[1] : parts[0];
+        const other = usersCache[otherUid] || {};
+        chatTitle.innerText = other.displayName ? `@${other.username||other.displayName}` : 'Private';
+        chatSubtitle.innerText = other.displayName ? `${other.displayName} • private` : 'Private chat';
+      }
+      listenMessages(roomId);
+    }
+
+    function openPrivateChat(otherUid){
+      if (!currentUser) return alert('Sign in to chat');
+      if (otherUid === currentUser.uid) return alert('Cannot chat with yourself');
+      const conv = [currentUser.uid, otherUid].sort().join('_');
+      setRoom(conv);
+    }
+
+    // Messages (Realtime DB)
+    let currentMessagesRef = null;
+    function listenMessages(roomId){
+      chatWindow.innerHTML = '<div class="small-muted text-center py-3">Loading messages…</div>';
+      if (currentMessagesRef) currentMessagesRef = null;
+      const path = roomId === 'global' ? 'rooms/global/messages' : `private/${roomId}/messages`;
+      currentMessagesRef = dbRef(db, path);
+      onValue(currentMessagesRef, snap => {
+        const msgs = snap.val() || {};
+        renderMessages(msgs);
+      });
+    }
+
+    function renderMessages(msgs){
+      chatWindow.innerHTML = '';
+      const ids = Object.keys(msgs || {});
+      if (ids.length === 0) { chatWindow.innerHTML = '<div class="small-muted text-center py-3">No messages yet</div>'; return; }
+      ids.sort((a,b)=> (msgs[a].timestamp||0) - (msgs[b].timestamp||0));
+      for (const id of ids){
+        const m = msgs[id];
+        const isMe = currentUser && m.senderUid === currentUser.uid;
+        const div = document.createElement('div');
+        div.className = 'message ' + (isMe ? 'me' : '');
+        div.innerHTML = `
+          <img class="thumb" src="${esc(m.senderPhoto||'')}" alt="">
+          <div style="max-width:100%;">
+            <div class="bubble ${isMe ? 'me' : ''}">
+              <div style="font-weight:600">${esc(m.senderName||'')}</div>
+              <div>${esc(m.text||'')}</div>
+              ${m.image ? `<a href="${esc(m.image)}" target="_blank"><img class="msg-img" src="${esc(m.image)}" /></a>` : ''}
+            </div>
+            <div class="timestamp">${timeFmt(m.timestamp)}</div>
+          </div>
+        `;
+        if (isMe) {
+          const btn = document.createElement('button');
+          btn.className = 'btn btn-sm btn-outline-danger mt-2';
+          btn.style.fontSize = '12px';
+          btn.textContent = 'Delete';
+          btn.onclick = () => deleteMessage(id, m);
+          div.querySelector('div[style]').appendChild(btn);
+        }
+        chatWindow.appendChild(div);
+      }
+      chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
+
+    // Send message (with optional image)
+    msgImage.addEventListener('change', e => selectedFile = e.target.files[0] || null);
+
+    async function uploadFile(file) {
+      return new Promise((resolve,reject)=>{
+        const path = `chat_images/${Date.now()}_${file.name.replace(/\s+/g,'_')}`;
+        const refS = sRef(storage, path);
+        const task = uploadBytesResumable(refS, file);
+        uploadProgress.style.display = 'block';
+        uploadBar.style.width = '0%';
+        task.on('state_changed', snap => {
+          const pct = Math.round((snap.bytesTransferred / snap.totalBytes)*100);
+          uploadBar.style.width = pct + '%';
+          uploadBar.innerText = pct + '%';
+        }, err => {
+          uploadProgress.style.display='none';
+          reject(err);
+        }, async () => {
+          try {
+            const url = await getDownloadURL(task.snapshot.ref);
+            uploadProgress.style.display='none';
+            resolve({ url, path });
+          } catch(e){ reject(e); }
+        });
+      });
+    }
+
+    async function sendMessage(e){
+      e?.preventDefault();
+      if (!currentUser) return alert('Sign in to send messages');
+      const text = (msgInput.value||'').trim();
+      const file = selectedFile;
+      if (!text && !file) return;
+      sendBtn.disabled = true; formStatus.innerText = 'Sending...';
+      try {
+        let imageUrl = '', imagePath = '';
+        if (file) {
+          const res = await uploadFile(file);
+          imageUrl = res.url; imagePath = res.path;
+        }
+        const payload = {
+          senderUid: currentUser.uid,
+          senderName: currentUser.displayName || currentUser.email || '',
+          senderPhoto: currentUser.photoURL || '',
+          text: text || '',
+          image: imageUrl || '',
+          imagePath: imagePath || '',
+          timestamp: Date.now()
+        };
+        const path = currentRoom === 'global' ? 'rooms/global/messages' : `private/${currentRoom}/messages`;
+        await push(dbRef(db, path), payload);
+        msgInput.value = ''; msgImage.value = ''; selectedFile = null; formStatus.innerText = '';
+      } catch(err){ alert('Send failed: ' + (err.message||err)); }
+      finally { sendBtn.disabled = false; uploadProgress.style.display='none'; }
+    }
+
+    messageForm.addEventListener('submit', sendMessage);
+
+    // Ask ChatGPT assistant — sends prompt and posts assistant's reply as a message
+    async function askAssistant(e){
+      e?.preventDefault();
+      if (!currentUser) return alert('Sign in to ask assistant');
+      const prompt = (msgInput.value || '').trim();
+      if (!prompt) return alert('Type a question in the message box first');
+      assistantBtn.disabled = true; formStatus.innerText = 'Assistant thinking...';
+
+      try {
+        // call OpenAI Chat Completion
+        // NOTE: for production, proxy through your server to keep API key secret.
+        if (!OPENAI_API_KEY || OPENAI_API_KEY === "PUT_YOUR_OPENAI_API_KEY_HERE") {
+          throw new Error('OpenAI API key not set in OPENAI_API_KEY variable.');
+        }
+        const body = {
+          model: "gpt-3.5-turbo",
+          messages: [{ role: "user", content: prompt }],
+          max_tokens: 600
+        };
+        const res = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type':'application/json',
+            'Authorization':'Bearer ' + OPENAI_API_KEY
+          },
+          body: JSON.stringify(body)
+        });
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error('OpenAI error: ' + text);
+        }
+        const data = await res.json();
+        const assistantText = data.choices?.[0]?.message?.content?.trim() || 'No response';
+
+        // push assistant message into current room
+        const payload = {
+          senderUid: 'assistant',
+          senderName: 'Assistant',
+          senderPhoto: '',
+          text: assistantText,
+          image: '',
+          imagePath: '',
+          timestamp: Date.now()
+        };
+        const path = currentRoom === 'global' ? 'rooms/global/messages' : `private/${currentRoom}/messages`;
+        await push(dbRef(db, path), payload);
+        msgInput.value = '';
+      } catch(err){ alert('Assistant failed: ' + (err.message||err)); }
+      finally { assistantBtn.disabled = false; formStatus.innerText = ''; }
+    }
+
+    assistantBtn.addEventListener('click', askAssistant);
+
+    // Delete message (and storage image)
+    async function deleteMessage(msgId, msgObj) {
+      if (!currentUser) return;
+      if (msgObj.senderUid !== currentUser.uid) return alert('You can only delete your own messages');
+      if (!confirm('Delete message?')) return;
+      try {
+        if (msgObj.imagePath) {
+          try { await deleteObject(sRef(storage, msgObj.imagePath)); } catch(e){ console.warn('Image delete failed', e); }
+        }
+        const path = currentRoom === 'global' ? `rooms/global/messages/${msgId}` : `private/${currentRoom}/messages/${msgId}`;
+        await remove(dbRef(db, path));
+      } catch(err){ alert('Delete failed: ' + (err.message||err)); }
+    }
+
+    // ======= WebRTC Video call (signaling via Realtime DB) =======
+    const servers = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+    let pc = null;
+    let localStream = null;
+    let remoteStream = null;
+    let callId = null;
+
+    // init local media
+    async function prepareCamera() {
+      if (localStream) return;
+      try {
+        localStream = await navigator.mediaDevices.getUserMedia({ video:true, audio:true });
+        localVideo.srcObject = localStream;
+      } catch(e){ alert('Camera/mic error: ' + (e.message||e)); throw e; }
+    }
+
+    // Start a call -> create call node in RTDB
+    startCallBtn.onclick = async () => {
+      await prepareCamera();
+      pc = new RTCPeerConnection(servers);
+      remoteStream = new MediaStream();
+      remoteVideo.srcObject = remoteStream;
+
+      localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+      pc.ontrack = e => e.streams[0].getTracks().forEach(t => remoteStream.addTrack(t));
+
+      // create call entry
+      const newCallRef = push(dbRef(db, 'calls'));
+      callId = newCallRef.key;
+
+      // ICE candidates
+      const offerCandidatesRef = dbRef(db, `calls/${callId}/offerCandidates`);
+      const answerCandidatesRef = dbRef(db, `calls/${callId}/answerCandidates`);
+      pc.onicecandidate = e => {
+        if (e.candidate) {
+          push(offerCandidatesRef, e.candidate.toJSON());
+        }
+      };
+
+      // create offer
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      await set(dbRef(db, `calls/${callId}/offer`), { sdp: offer.sdp, type: offer.type });
+
+      // listen for answer
+      onValue(dbRef(db, `calls/${callId}/answer`), async snap => {
+        const a = snap.val();
+        if (!a) return;
+        const remoteDesc = { sdp: a.sdp, type: a.type };
+        if (!pc.currentRemoteDescription) await pc.setRemoteDescription(remoteDesc);
+      });
+
+      // listen for answer candidates
+      onValue(answerCandidatesRef, snap => {
+        snap.forEach(s => {
+          const c = s.val();
+          pc.addIceCandidate(c).catch(e => console.warn('addIce error', e));
+        });
+      });
+
+      alert('Call started. Share Call ID with peer: ' + callId);
+    };
+
+    // Join a call by ID
+    joinCallBtn.onclick = async () => {
+      const id = prompt('Enter Call ID to join');
+      if (!id) return;
+      callId = id;
+      await prepareCamera();
+      pc = new RTCPeerConnection(servers);
+      remoteStream = new MediaStream();
+      remoteVideo.srcObject = remoteStream;
+      localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+      pc.ontrack = e => e.streams[0].getTracks().forEach(t => remoteStream.addTrack(t));
+
+      const offerRef = dbRef(db, `calls/${callId}/offer`);
+      const offerSnap = await get(offerRef);
+      if (!offerSnap.exists()) return alert('Call not found');
+      const offer = offerSnap.val();
+      await pc.setRemoteDescription({ sdp: offer.sdp, type: offer.type });
+
+      // ICE candidates
+      const answerCandidatesRef = dbRef(db, `calls/${callId}/answerCandidates`);
+      const offerCandidatesRef = dbRef(db, `calls/${callId}/offerCandidates`);
+      pc.onicecandidate = e => {
+        if (e.candidate) push(answerCandidatesRef, e.candidate.toJSON());
+      };
+
+      // listen for offer candidates
+      onValue(offerCandidatesRef, snap => {
+        snap.forEach(s => {
+          const c = s.val();
+          pc.addIceCandidate(c).catch(e => console.warn('addIce', e));
+        });
+      });
+
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      await set(dbRef(db, `calls/${callId}/answer`), { sdp: answer.sdp, type: answer.type });
+    };
+
+    // hangup cleanup: reload page
+    window.addEventListener('beforeunload', () => {
+      if (pc) pc.close();
+      if (localStream) localStream.getTracks().forEach(t => t.stop());
+    });
+
+    // ======= Auth state changes =======
+    onAuthStateChanged(auth, async (user) => {
+      currentUser = user;
+      if (user) {
+        await ensureProfile(user);
+        renderAuth();
+        listenUsers();
+        setRoom('global');
+      } else {
+        currentUser = null;
+        profile = null;
+        renderAuth();
+        usersList.innerHTML = '<div class="small-muted">Sign in to see users</div>';
+        chatWindow.innerHTML = '<div class="small-muted text-center py-3">Sign in to start chatting</div>';
+      }
+    });
+
+    // initial UI
+    renderAuth();
+    chatWindow.innerHTML = '<div class="small-muted text-center py-3">Sign in to start chatting</div>';
+  </script>
+</body>
+</html>
