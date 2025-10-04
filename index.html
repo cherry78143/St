@@ -3,15 +3,14 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>XDARK Private Chat — Single File</title>
-<!-- Minimal modern styles -->
+<title>XDARK — Full Chat + Private Calls (Single File)</title>
 <style>
   :root{
     --bg:#071021; --card:#0b1220; --accent:#06b6d4; --muted:#94a3b8; --glass: rgba(255,255,255,0.03);
     --radius:12px; color-scheme: dark;
   }
   *{box-sizing:border-box}
-  body{margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial;background:linear-gradient(180deg,#020617,#071021);color:#e6eef6}
+  body{margin:0;font-family:Inter,system-ui,Roboto,Arial;background:linear-gradient(180deg,#020617,#071021);color:#e6eef6}
   .wrap{max-width:1100px;margin:18px auto;display:grid;grid-template-columns:300px 1fr;gap:16px;padding:12px}
   @media(max-width:900px){.wrap{grid-template-columns:1fr} .left{order:2} .right{order:1}}
   .card{background:var(--card);border-radius:var(--radius);padding:14px;box-shadow:0 8px 24px rgba(0,0,0,0.6)}
@@ -19,6 +18,7 @@
   .logo{width:44px;height:44px;border-radius:10px;background:linear-gradient(135deg,var(--accent),#7c3aed);display:flex;align-items:center;justify-content:center;font-weight:700}
   h1{margin:0;font-size:18px}
   .small{font-size:13px;color:var(--muted)}
+  .tiny{font-size:12px;color:var(--muted)}
   .user-row{display:flex;align-items:center;gap:12px}
   .avatar{width:44px;height:44px;border-radius:50%;background:#071428;display:flex;align-items:center;justify-content:center;font-weight:700}
   input,button,textarea,select{font:inherit}
@@ -38,24 +38,25 @@
   .call-panel{display:flex;gap:12px;align-items:center;margin-top:10px}
   video{background:#000;border-radius:10px;max-width:100%}
   .modal{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);z-index:999}
-  .tiny{font-size:12px;color:var(--muted)}
+  .enable-audio-banner{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#0ea5a4;padding:8px 12px;border-radius:8px;cursor:pointer;z-index:1000}
+  .system-msg{font-size:13px;color:var(--muted);text-align:center;padding:6px}
 </style>
 </head>
 <body>
 
 <div class="wrap">
-  <!-- LEFT: profile & user/search -->
+  <!-- LEFT: profile & search -->
   <div class="left">
     <div class="card">
       <div class="brand">
         <div class="logo">XD</div>
         <div>
-          <h1>XDARK • Private Chat</h1>
-          <div class="small muted">1:1 chat • Audio & Video</div>
+          <h1>XDARK — Chat</h1>
+          <div class="small muted">Private 1:1 • Audio & Video</div>
         </div>
       </div>
 
-      <hr style="border:0;border-top:1px solid rgba(255,255,255,0.03);margin:12px 0">
+      <hr style="border:0;border-top:1px solid rgba(255,255,255,0.03);margin:12px 0" />
 
       <div class="user-row">
         <div class="avatar" id="avatar">U</div>
@@ -69,7 +70,7 @@
       </div>
 
       <div style="margin-top:12px">
-        <div class="tiny muted">Set username</div>
+        <div class="tiny muted">Set username (optional)</div>
         <div style="display:flex;gap:8px;margin-top:6px">
           <input id="usernameInput" placeholder="username (unique)" />
           <button id="saveUsername" class="btn">Save</button>
@@ -89,14 +90,14 @@
 
     <div class="card" style="margin-top:12px">
       <div style="display:flex;justify-content:space-between;align-items:center">
-        <div class="tiny muted">Account actions</div>
+        <div class="tiny muted">Account</div>
         <div class="tiny muted">Auth</div>
       </div>
       <div style="display:flex;gap:8px;margin-top:10px">
         <button id="openAuth" class="btn">Sign in / up</button>
         <button id="btnProfile" class="btn" style="background:#334155">Profile</button>
       </div>
-      <div style="margin-top:12px" class="tiny muted">Tips: Click a user to start a private chat. Start audio/video from chat header.</div>
+      <div style="margin-top:12px" class="tiny muted">Click a user to start a private chat. Use Video/Voice to call.</div>
     </div>
   </div>
 
@@ -117,7 +118,7 @@
       <div class="messages" id="messages"></div>
 
       <div class="composer">
-        <input id="msgInput" placeholder="Type message..." />
+        <input id="msgInput" placeholder="Type a message..." />
         <input type="file" id="fileInput" style="display:none" />
         <button id="attachBtn" class="btn" style="background:#334155">Attach</button>
         <button id="sendBtn" class="btn">Send</button>
@@ -133,20 +134,21 @@
       <div class="call-panel" style="margin-top:12px">
         <div style="flex:1">
           <div class="tiny muted">You</div>
-          <video id="localVideo" autoplay muted playsinline style="height:240px;width:100%"></video>
+          <video id="localVideo" autoplay muted playsinline style="height:240px;width:100%;object-fit:cover"></video>
         </div>
         <div style="flex:1">
           <div class="tiny muted">Remote</div>
-          <video id="remoteVideo" autoplay playsinline style="height:240px;width:100%"></video>
+          <video id="remoteVideo" autoplay playsinline style="height:240px;width:100%;object-fit:cover"></video>
         </div>
       </div>
+      <div id="callStatus" class="tiny muted" style="margin-top:8px"></div>
     </div>
   </div>
 </div>
 
 <!-- AUTH MODAL -->
 <div id="authModal" class="modal" style="display:none">
-  <div class="card" style="width:380px">
+  <div class="card" style="width:400px">
     <div style="display:flex;justify-content:space-between;align-items:center">
       <div><strong>Sign in / Sign up</strong></div>
       <div class="tiny muted">Firebase Auth</div>
@@ -185,14 +187,36 @@
   </div>
 </div>
 
-<!-- Firebase compat SDKs -->
+<!-- INCOMING CALL MODAL -->
+<div id="incomingModal" class="modal" style="display:none">
+  <div class="card" style="width:320px;text-align:center">
+    <div style="font-size:16px"><strong id="incomingCaller">Incoming call</strong></div>
+    <div class="tiny muted" id="incomingHint" style="margin-top:6px">Answer to join</div>
+    <div style="display:flex;gap:8px;justify-content:center;margin-top:12px">
+      <button id="acceptBtn" class="btn">Accept</button>
+      <button id="rejectBtn" class="btn" style="background:#ef4444">Reject</button>
+    </div>
+  </div>
+</div>
+
+<!-- Enable audio banner (shown if autoplay blocked) -->
+<div id="enableAudio" class="enable-audio-banner" style="display:none">Click to enable audio playback</div>
+
+<!-- Firebase SDKs (compat) -->
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-storage-compat.js"></script>
 
 <script>
-/* ---------- Use your Firebase project config here (from your message) ---------- */
+/*
+  Full single-file XDARK app
+  - Replace firebaseConfig below if you want to use another project.
+  - For Google Sign-In to work: add your site (localhost or hosting domain) to
+    Firebase Console -> Authentication -> Authorized domains.
+  - Use HTTPS for WebRTC in production. Localhost works without HTTPS for testing.
+*/
+
 const firebaseConfig = {
   apiKey: "AIzaSyCj1bt3rP1XcIbSfTUFhrkUrm9Li8ZB85A",
   authDomain: "xdark-8b6b0.firebaseapp.com",
@@ -202,67 +226,89 @@ const firebaseConfig = {
   messagingSenderId: "12349294669",
   appId: "1:12349294669:web:836be375f5a28235823404"
 };
+
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.database();
 const storage = firebase.storage();
 
-/* ---------- UI elements ---------- */
+/* ---------- UI references ---------- */
 const signBtn = document.getElementById('signBtn');
-const openAuth = document.getElementById('openAuth');
-const authModal = document.getElementById('authModal');
-const closeAuth = document.getElementById('closeAuth');
-const emailSignIn = document.getElementById('emailSignIn');
-const emailSignUp = document.getElementById('emailSignUp');
-const googleSignIn = document.getElementById('googleSignIn');
-const forgotBtn = document.getElementById('forgotBtn');
-const authEmail = document.getElementById('authEmail');
-const authPassword = document.getElementById('authPassword');
+const openAuth = document.getElementById('openAuth'), authModal = document.getElementById('authModal'), closeAuth = document.getElementById('closeAuth');
+const emailSignIn = document.getElementById('emailSignIn'), emailSignUp = document.getElementById('emailSignUp'), googleSignIn = document.getElementById('googleSignIn'), forgotBtn = document.getElementById('forgotBtn');
+const authEmail = document.getElementById('authEmail'), authPassword = document.getElementById('authPassword');
 
-const avatarEl = document.getElementById('avatar');
-const displayNameEl = document.getElementById('displayName');
-const displayEmailEl = document.getElementById('displayEmail');
-const usernameInput = document.getElementById('usernameInput');
-const saveUsername = document.getElementById('saveUsername');
-const usernameMsg = document.getElementById('usernameMsg');
+const avatarEl = document.getElementById('avatar'), displayNameEl = document.getElementById('displayName'), displayEmailEl = document.getElementById('displayEmail');
+const usernameInput = document.getElementById('usernameInput'), saveUsername = document.getElementById('saveUsername'), usernameMsg = document.getElementById('usernameMsg');
+const searchBox = document.getElementById('searchBox'), searchBtn = document.getElementById('searchBtn'), usersList = document.getElementById('usersList');
 
-const searchBox = document.getElementById('searchBox');
-const searchBtn = document.getElementById('searchBtn');
-const usersList = document.getElementById('usersList');
+const msgInput = document.getElementById('msgInput'), sendBtn = document.getElementById('sendBtn'), messagesEl = document.getElementById('messages'), attachBtn = document.getElementById('attachBtn'), fileInput = document.getElementById('fileInput');
 
-const msgInput = document.getElementById('msgInput');
-const sendBtn = document.getElementById('sendBtn');
-const messagesEl = document.getElementById('messages');
-const attachBtn = document.getElementById('attachBtn');
-const fileInput = document.getElementById('fileInput');
+const btnVideo = document.getElementById('btnVideo'), btnAudio = document.getElementById('btnAudio');
+const callCard = document.getElementById('callCard'), callTitle = document.getElementById('callTitle'), hangupBtn = document.getElementById('hangupBtn');
+const localVideo = document.getElementById('localVideo'), remoteVideo = document.getElementById('remoteVideo'), callStatus = document.getElementById('callStatus');
 
-const btnVideo = document.getElementById('btnVideo');
-const btnAudio = document.getElementById('btnAudio');
-const callCard = document.getElementById('callCard');
-const callTitle = document.getElementById('callTitle');
-const hangupBtn = document.getElementById('hangupBtn');
-const localVideo = document.getElementById('localVideo');
-const remoteVideo = document.getElementById('remoteVideo');
+const openProfileBtn = document.getElementById('btnProfile'), profileModal = document.getElementById('profileModal'), closeProfile = document.getElementById('closeProfile'), saveProfileBtn = document.getElementById('saveProfile');
+const profileName = document.getElementById('profileName'), profilePhoto = document.getElementById('profilePhoto');
 
-const openProfileBtn = document.getElementById('btnProfile');
-const profileModal = document.getElementById('profileModal');
-const closeProfile = document.getElementById('closeProfile');
-const saveProfileBtn = document.getElementById('saveProfile');
-const profileName = document.getElementById('profileName');
-const profilePhoto = document.getElementById('profilePhoto');
+const incomingModal = document.getElementById('incomingModal'), incomingCaller = document.getElementById('incomingCaller'), incomingHint = document.getElementById('incomingHint');
+const acceptBtn = document.getElementById('acceptBtn'), rejectBtn = document.getElementById('rejectBtn');
+const enableAudioBanner = document.getElementById('enableAudio');
 
 let currentUser = null;
-let selectedUser = null; // the user we are chatting with
+let selectedUser = null;
 let currentRoomId = null;
 let messagesRef = null;
 
-/* ------------------- Auth state ------------------- */
+/* WebRTC & call state */
+let pc = null;
+let localStream = null;
+let remoteStream = null;
+let outgoingCallRef = null;   // callRef when we initiate
+let incomingCall = null;      // {roomId, callKey, offer, callRefSnapshot}
+let callRoomListener = null;  // reference to room listener so we can off() it
+
+const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] }; // add TURN in production
+
+/* Audio context for ringtone & autoplay resume */
+let audioContext = null;
+let ringOsc = null;
+let ringGain = null;
+let autoplayAllowed = false;
+
+/* ---------------- Helper UI functions ---------------- */
+function escapeHtml(s){ return (s||'').toString().replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
+function showSystem(text){
+  const div = document.createElement('div'); div.className = 'msg';
+  div.innerHTML = `<div class="system-msg">${escapeHtml(text)}</div>`;
+  messagesEl.appendChild(div); messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+function showMessage(m){
+  const div = document.createElement('div');
+  const own = currentUser && m.from === currentUser.uid;
+  div.className = 'msg ' + (own ? 'me':'');
+  if (m.type === 'text') {
+    div.innerHTML = `<div style="font-size:12px;color:var(--muted)">${escapeHtml(m.name||'')}</div>
+      <div style="margin-top:6px">${escapeHtml(m.text)}</div>
+      <div class="tiny muted" style="margin-top:6px">${new Date(m.ts).toLocaleTimeString()}</div>`;
+  } else if (m.type === 'image') {
+    div.innerHTML = `<div style="font-size:12px;color:var(--muted)">${escapeHtml(m.name||'')}</div>
+      <img src="${m.url}" class="file-preview" /><div class="tiny muted">${new Date(m.ts).toLocaleTimeString()}</div>`;
+  } else if (m.type === 'system') {
+    div.innerHTML = `<div class="system-msg">${escapeHtml(m.text)}</div>`;
+  } else if (m.type === 'call') {
+    const t = m.action === 'outgoing' ? 'Call started' : (m.action === 'rejected' ? 'Call rejected' : (m.action === 'ended' ? 'Call ended' : 'Call event'));
+    div.innerHTML = `<div class="system-msg">${escapeHtml(t + (m.note ? (' — '+m.note):''))}</div>`;
+  }
+  messagesEl.appendChild(div); messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+/* ---------- Authentication ---------- */
 auth.onAuthStateChanged(async user => {
   currentUser = user;
   if (user) {
-    // ensure user entry exists in DB for search
-    const uRef = db.ref('users/'+user.uid);
-    await uRef.update({
+    // write user record for search / presence
+    await db.ref('users/'+user.uid).update({
       uid: user.uid,
       email: user.email || null,
       displayName: user.displayName || (user.email ? user.email.split('@')[0] : 'User'),
@@ -279,13 +325,15 @@ auth.onAuthStateChanged(async user => {
     displayEmailEl.textContent = '';
     avatarEl.textContent = 'U';
     signBtn.textContent = 'Sign in';
-    // cleanup selection
     selectedUser = null;
+    currentRoomId = null;
+    if (messagesRef) { messagesRef.off(); messagesRef = null; }
+    messagesEl.innerHTML = '';
     setChatHeader();
   }
 });
 
-/* ---------- Auth UI handlers ---------- */
+/* Auth UI */
 signBtn.addEventListener('click', ()=> {
   if (currentUser) auth.signOut();
   else authModal.style.display = 'flex';
@@ -294,40 +342,40 @@ openAuth.addEventListener('click', ()=> authModal.style.display = 'flex');
 closeAuth.addEventListener('click', ()=> authModal.style.display = 'none');
 
 emailSignUp.addEventListener('click', async ()=>{
-  const email = authEmail.value.trim(); const pass = authPassword.value;
-  if (!email || !pass) return alert('Enter email and password');
+  const email = authEmail.value.trim(), pass = authPassword.value;
+  if (!email || !pass) return alert('Enter email & password');
   try {
     const cred = await auth.createUserWithEmailAndPassword(email, pass);
     await cred.user.updateProfile({ displayName: email.split('@')[0] });
     alert('Account created');
     authModal.style.display = 'none';
-  } catch(e){ alert('Sign up error: '+e.message) }
+  } catch(e){ alert('Sign up error: '+e.message); }
 });
 emailSignIn.addEventListener('click', async ()=>{
-  const email = authEmail.value.trim(); const pass = authPassword.value;
-  if (!email || !pass) return alert('Enter email and password');
+  const email = authEmail.value.trim(), pass = authPassword.value;
+  if (!email || !pass) return alert('Enter email & password');
   try {
     await auth.signInWithEmailAndPassword(email, pass);
     authModal.style.display = 'none';
-  } catch(e){ alert('Sign in error: '+e.message) }
+  } catch(e){ alert('Sign in error: '+e.message); }
 });
 googleSignIn.addEventListener('click', async ()=>{
   const provider = new firebase.auth.GoogleAuthProvider();
   try {
     await auth.signInWithPopup(provider);
     authModal.style.display = 'none';
-  } catch(e){ alert('Google sign in error: '+e.message) }
+  } catch(e){ alert('Google sign in error: '+e.message); }
 });
 forgotBtn.addEventListener('click', async ()=>{
   const email = authEmail.value.trim();
-  if (!email) return alert('Enter your email');
+  if (!email) return alert('Enter your email to receive reset link');
   try {
     await auth.sendPasswordResetEmail(email);
-    alert('Reset email sent');
-  } catch(e){ alert('Error: '+e.message) }
+    alert('Password reset email sent');
+  } catch(e){ alert('Error: '+e.message); }
 });
 
-/* ---------- Profile ---------- */
+/* Profile modal */
 openProfileBtn.addEventListener('click', ()=>{
   if (!currentUser) return alert('Sign in first');
   profileModal.style.display = 'flex';
@@ -339,24 +387,21 @@ saveProfileBtn.addEventListener('click', async ()=>{
   if (!currentUser) return alert('Sign in first');
   try {
     await currentUser.updateProfile({ displayName: profileName.value.trim() || currentUser.displayName, photoURL: profilePhoto.value.trim() || null });
-    // update db entry
     await db.ref('users/'+currentUser.uid).update({ displayName: currentUser.displayName, photoURL: currentUser.photoURL });
     alert('Profile updated');
     profileModal.style.display = 'none';
-  } catch(e){ alert('Profile update error: '+e.message) }
+  } catch(e){ alert('Profile error: '+e.message); }
 });
 
-/* ---------- Username set (also used as search field) ---------- */
+/* ---------- Username save ---------- */
 saveUsername.addEventListener('click', async ()=>{
   const name = usernameInput.value.trim();
   if (!currentUser) return alert('Sign in first');
   if (!name) return alert('Enter username');
-  // check unique: we'll ensure no other user has same displayName (simple check)
   try {
     const q = await db.ref('users').orderByChild('displayName').equalTo(name).once('value');
     const val = q.val() || {};
-    const keys = Object.keys(val || {});
-    // if another user found who isn't current, reject
+    const keys = Object.keys(val);
     if (keys.length > 0 && !(keys.length === 1 && keys[0] === currentUser.uid)) {
       usernameMsg.textContent = 'Username already taken';
       return;
@@ -365,45 +410,39 @@ saveUsername.addEventListener('click', async ()=>{
     await currentUser.updateProfile({ displayName: name });
     usernameMsg.textContent = 'Saved';
     setTimeout(()=> usernameMsg.textContent = '', 2000);
-  } catch(e){ alert('Error saving username: '+e.message) }
+  } catch(e){ alert('Error saving username: '+e.message); }
 });
 
-/* ---------- User search & listing ---------- */
+/* ---------- Search & list users ---------- */
 async function searchUsers(q){
   usersList.innerHTML = '';
   if (!q) {
-    // show recent users
-    const snap = await db.ref('users').orderByChild('lastSeen').limitToLast(30).once('value');
+    const snap = await db.ref('users').orderByChild('lastSeen').limitToLast(50).once('value');
     const rows = snap.val() || {};
     const arr = Object.values(rows).sort((a,b)=> (b.lastSeen||0)-(a.lastSeen||0));
     arr.forEach(renderUserItem);
     return;
   }
-  // simple search: by displayName or email (prefix)
-  const byName = await db.ref('users').orderByChild('displayName').startAt(q).endAt(q+"\uf8ff").once('value');
-  const byEmail = await db.ref('users').orderByChild('email').startAt(q).endAt(q+"\uf8ff").once('value');
+  const byName = await db.ref('users').orderByChild('displayName').startAt(q).endAt(q + "\uf8ff").once('value');
+  const byEmail = await db.ref('users').orderByChild('email').startAt(q).endAt(q + "\uf8ff").once('value');
   const map = {};
-  Object.values(byName.val()||{}).forEach(u=> map[u.uid]=u);
-  Object.values(byEmail.val()||{}).forEach(u=> map[u.uid]=u);
+  Object.values(byName.val() || {}).forEach(u => map[u.uid] = u);
+  Object.values(byEmail.val() || {}).forEach(u => map[u.uid] = u);
   Object.values(map).forEach(renderUserItem);
 }
 function renderUserItem(u){
-  const div = document.createElement('div');
-  div.className = 'user-item';
+  const div = document.createElement('div'); div.className = 'user-item';
   div.innerHTML = `<div style="width:44px;height:44px;border-radius:8px;background:rgba(255,255,255,0.02);display:flex;align-items:center;justify-content:center">${(u.displayName||u.email||'U')[0].toUpperCase()}</div>
     <div style="flex:1"><div><strong>${escapeHtml(u.displayName||'NoName')}</strong></div><div class="tiny muted">${escapeHtml(u.email||'')}</div></div>`;
   div.addEventListener('click', ()=> openPrivateChat(u));
   usersList.appendChild(div);
 }
-
 searchBtn.addEventListener('click', ()=> searchUsers(searchBox.value.trim()));
-searchBox.addEventListener('keydown', e => { if (e.key==='Enter') searchUsers(searchBox.value.trim()); });
-
-/* show recent users initially */
+searchBox.addEventListener('keydown', e => { if (e.key === 'Enter') searchUsers(searchBox.value.trim()); });
 searchUsers('');
 
-/* ---------- Private chat logic ---------- */
-function roomIdFor(u1, u2){ // deterministic room id for pair
+/* ---------- Private chat: open chat & messages ---------- */
+function roomIdFor(u1, u2){
   const a = u1.uid < u2.uid ? u1.uid : u2.uid;
   const b = u1.uid < u2.uid ? u2.uid : u1.uid;
   return 'private_'+a+'_'+b;
@@ -412,48 +451,30 @@ function roomIdFor(u1, u2){ // deterministic room id for pair
 async function openPrivateChat(userObj){
   if (!currentUser) return alert('Sign in to chat');
   selectedUser = userObj;
-  currentRoomId = roomIdFor({uid:currentUser.uid}, userObj);
+  currentRoomId = roomIdFor({uid: currentUser.uid}, userObj);
   setChatHeader();
-  // attach messages
+  // detach previous message listener
   if (messagesRef) messagesRef.off();
   messagesEl.innerHTML = '';
   messagesRef = db.ref('privateMessages/'+currentRoomId);
-  messagesRef.limitToLast(500).on('child_added', snap => {
-    const m = snap.val(); showMessage(m);
-  });
-  // update UI for call buttons
+  messagesRef.limitToLast(500).on('child_added', snap => { showMessage(snap.val()); });
+  // ensure we attach call listener for this room
+  setupCallListenersForRoom(currentRoomId);
   btnVideo.style.display = 'inline-block'; btnAudio.style.display = 'inline-block';
 }
 
-/* header update */
 function setChatHeader(){
   if (!selectedUser) {
     document.getElementById('chatTitle').innerHTML = '<strong>Welcome</strong>';
     document.getElementById('chatSubtitle').textContent = 'Select a user to start private chat';
     btnVideo.style.display = 'none'; btnAudio.style.display = 'none';
   } else {
-    document.getElementById('chatTitle').innerHTML = `<strong>${escapeHtml(selectedUser.displayName||selectedUser.email||'User')}</strong>`;
+    document.getElementById('chatTitle').innerHTML = `<strong>${escapeHtml(selectedUser.displayName || selectedUser.email || 'User')}</strong>`;
     document.getElementById('chatSubtitle').textContent = 'Private 1:1 chat';
   }
 }
 
-/* show message */
-function showMessage(m){
-  const div = document.createElement('div');
-  div.className = 'msg '+(m.from === currentUser.uid ? 'me':'');
-  if (m.type === 'text') {
-    div.innerHTML = `<div style="font-size:12px;color:var(--muted)">${escapeHtml(m.name||'')}</div><div style="margin-top:6px">${escapeHtml(m.text)}</div><div class="tiny muted" style="margin-top:6px">${new Date(m.ts).toLocaleTimeString()}</div>`;
-  } else if (m.type === 'image') {
-    div.innerHTML = `<div style="font-size:12px;color:var(--muted)">${escapeHtml(m.name||'')}</div><img src="${m.url}" class="file-preview" /><div class="tiny muted">${new Date(m.ts).toLocaleTimeString()}</div>`;
-  } else if (m.type === 'system') {
-    div.innerHTML = `<div class="tiny muted">${escapeHtml(m.text)}</div>`;
-    div.style.textAlign='center';
-  }
-  messagesEl.appendChild(div);
-  messagesEl.scrollTop = messagesEl.scrollHeight;
-}
-
-/* send message */
+/* ---------- Send messages & attachments ---------- */
 sendBtn.addEventListener('click', async ()=>{
   if (!currentRoomId) return alert('Open a private chat first');
   const text = msgInput.value.trim(); if (!text) return;
@@ -462,15 +483,14 @@ sendBtn.addEventListener('click', async ()=>{
   msgInput.value = '';
 });
 
-/* attach/upload */
 attachBtn.addEventListener('click', ()=> fileInput.click());
-fileInput.addEventListener('change', async (e)=>{
+fileInput.addEventListener('change', async e => {
   const file = e.target.files[0]; if (!file) return;
   if (!currentRoomId) return alert('Open a chat first');
   const id = Date.now() + '_' + file.name;
   const path = `privateUploads/${currentRoomId}/${id}`;
-  const upl = storage.ref(path).put(file);
-  upl.on('state_changed', ()=>{}, err=> alert('Upload error: '+err.message), async ()=>{
+  const task = storage.ref(path).put(file);
+  task.on('state_changed', ()=>{}, err => alert('Upload error: '+err.message), async ()=>{
     const url = await storage.ref(path).getDownloadURL();
     const m = { type:'image', url, from: currentUser.uid, name: currentUser.displayName||currentUser.email, ts: Date.now() };
     await db.ref('privateMessages/'+currentRoomId).push(m);
@@ -478,149 +498,366 @@ fileInput.addEventListener('change', async (e)=>{
   });
 });
 
-/* ---------- Simple WebRTC 1:1 signaling using Realtime DB ---------- */
-/*
-  Approach:
-  - Calls stored under /privateCalls/{roomId}/{callId}
-  - Caller writes offer -> callee listens and writes answer -> ICE candidates exchanged under candidates list
-  - Works for 1:1. No TURN provided here (use TURN for better connectivity).
+/* ---------- Calls: signaling and WebRTC ---------- */
+/* Data model:
+   /privateCalls/{roomId}/{callId} = {
+     from: uid,
+     callerName: string,
+     offer: {...},
+     answer: {...}, // written by callee
+     ts
+   }
+   /privateCalls/{roomId}/{callId}/candidates -> child list of ICE candidates
 */
 
-let pc = null, localStream = null, remoteStream = null, callRef = null;
+let roomCallsRef = null;
+function setupCallListenersForRoom(roomId){
+  // detach previous
+  if (callRoomListener && roomCallsRef) {
+    roomCallsRef.off('child_added', callRoomListener);
+    callRoomListener = null;
+    roomCallsRef = null;
+  }
+  if (!roomId) return;
+  roomCallsRef = db.ref('privateCalls/'+roomId);
+  callRoomListener = roomCallsRef.on('child_added', snap => {
+    try {
+      const callKey = snap.key;
+      const data = snap.val();
+      if (!data || !data.offer) return;
+      // ignore our own calls
+      if (data.from === (currentUser ? currentUser.uid : null)) return;
+      // if already processing an incoming call, ignore (simple lock)
+      if (incomingCall && incomingCall.callKey === callKey) return;
+      // present incoming call UI
+      incomingCall = { roomId, callKey, offer: data.offer, callRefSnap: snap, callerName: data.callerName || 'Caller', callRef: snap.ref };
+      // show system message in chat
+      awaitPushSystemMessage(currentRoomId, `Incoming call from ${incomingCall.callerName}`);
+      // show modal & start ringtone
+      incomingCaller.textContent = `Incoming call — ${incomingCall.callerName}`;
+      incomingHint.textContent = 'Accept to connect';
+      incomingModal.style.display = 'flex';
+      startRingtone();
+    } catch(e){ console.warn('incoming handler err', e); }
+  });
+}
 
-/* STUN only */
-const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+/* push a system message into the chat (so both parties see it) */
+async function awaitPushSystemMessage(roomId, text){
+  if (!roomId) return;
+  await db.ref('privateMessages/'+roomId).push({ type:'system', text, ts: Date.now() });
+}
 
+/* Initiate call (caller) */
 btnVideo.addEventListener('click', ()=> initiateCall({video:true}));
 btnAudio.addEventListener('click', ()=> initiateCall({video:false}));
-hangupBtn.addEventListener('click', hangup);
 
 async function initiateCall({video}){
-  if (!selectedUser) return alert('Select a user to call');
-  // get media
+  if (!selectedUser || !currentRoomId) return alert('Open a private chat to call');
   try {
-    localStream = await navigator.mediaDevices.getUserMedia({ audio:true, video: video ? {width:640,height:480} : false });
-  } catch(e){ return alert('Media error: '+e.message); }
-  // show local
-  localVideo.srcObject = localStream;
-  // create RTCPeerConnection
-  pc = new RTCPeerConnection(rtcConfig);
-  remoteStream = new MediaStream();
-  remoteVideo.srcObject = remoteStream;
-  localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
-  pc.ontrack = e => e.streams[0].getTracks().forEach(track => remoteStream.addTrack(track));
-  pc.onicecandidate = e => {
-    if (e.candidate && callRef) {
-      callRef.child('candidates').push({ candidate: e.candidate.toJSON(), from: currentUser.uid });
+    // request media
+    try {
+      localStream = await navigator.mediaDevices.getUserMedia({ audio:true, video: video ? {width:640, height:480} : false });
+    } catch(e) {
+      // fallback to audio only if video failed
+      try { localStream = await navigator.mediaDevices.getUserMedia({ audio:true, video:false }); } catch(err){ throw err; }
     }
-  };
-  // create call node
-  const roomCallsRef = db.ref('privateCalls/'+currentRoomId);
-  callRef = roomCallsRef.push();
-  const offer = await pc.createOffer();
-  await pc.setLocalDescription(offer);
-  await callRef.set({ from: currentUser.uid, offer: offer.toJSON(), ts: Date.now() });
 
-  // listen for answer & candidates
-  callRef.on('value', snap => {
-    const v = snap.val() || {};
-    if (v.answer && !pc.remoteDescription) {
-      pc.setRemoteDescription(new RTCSessionDescription(v.answer)).catch(()=>{});
-    }
-  });
-  callRef.child('candidates').on('child_added', snap => {
-    const c = snap.val();
-    if (c && c.candidate && c.from !== currentUser.uid) {
-      pc.addIceCandidate(new RTCIceCandidate(c.candidate)).catch(()=>{});
-    }
-  });
-  callCard.style.display = 'flex';
-  callTitle.textContent = 'Calling: '+(selectedUser.displayName||selectedUser.email);
+    // show local video (muted to allow autoplay)
+    localVideo.srcObject = localStream;
+    localVideo.muted = true;
+    await tryPlay(localVideo).catch(()=>{});
+
+    // create pc and remote stream
+    pc = new RTCPeerConnection(rtcConfig);
+    remoteStream = new MediaStream();
+    remoteVideo.srcObject = remoteStream;
+    remoteVideo.muted = false;
+
+    // add local tracks
+    localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
+    // ontrack
+    pc.ontrack = event => {
+      if (event.streams && event.streams[0]) {
+        event.streams[0].getTracks().forEach(t => remoteStream.addTrack(t));
+      } else if (event.track) {
+        remoteStream.addTrack(event.track);
+      }
+      tryPlay(remoteVideo).catch(()=>{});
+    };
+
+    // ice -> push to call node
+    pc.onicecandidate = e => {
+      if (e.candidate && outgoingCallRef) {
+        outgoingCallRef.child('candidates').push({ candidate: e.candidate.toJSON(), from: currentUser.uid });
+      }
+    };
+
+    // create call node
+    const roomRef = db.ref('privateCalls/'+currentRoomId);
+    outgoingCallRef = roomRef.push();
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    await outgoingCallRef.set({
+      from: currentUser.uid,
+      callerName: currentUser.displayName || currentUser.email || 'Caller',
+      offer: offer.toJSON(),
+      ts: Date.now()
+    });
+
+    // write a call "outgoing" system message to chat so callee sees call invite inside chat
+    await db.ref('privateMessages/'+currentRoomId).push({ type:'call', action:'outgoing', from: currentUser.uid, note: 'Calling...', ts: Date.now() });
+
+    // listen for answer and remote candidates
+    outgoingCallRef.on('value', snap => {
+      const v = snap.val() || {};
+      if (v.answer && !pc.remoteDescription) {
+        pc.setRemoteDescription(new RTCSessionDescription(v.answer)).then(()=> {
+          callStatus.textContent = 'Connected';
+          db.ref('privateMessages/'+currentRoomId).push({ type:'call', action:'connected', from: currentUser.uid, note: 'Connected', ts: Date.now() });
+        }).catch(e=>console.warn(e));
+      }
+      if (v.rejectedBy) {
+        showSystem('Call rejected');
+        hangup(); // cleanup
+      }
+    });
+    outgoingCallRef.child('candidates').on('child_added', snap => {
+      const c = snap.val();
+      if (!c) return;
+      if (c.from === currentUser.uid) return;
+      try { pc.addIceCandidate(new RTCIceCandidate(c.candidate)).catch(()=>{}); } catch(e){ console.warn(e); }
+    });
+
+    // show call UI
+    callCard.style.display = 'flex';
+    callTitle.textContent = 'Calling: ' + (selectedUser.displayName || selectedUser.email);
+    callStatus.textContent = 'Waiting for answer...';
+
+  } catch(e) {
+    alert('Could not start call: ' + e.message);
+    console.error(e);
+  }
 }
 
-/* Answer incoming calls: listen for calls for the current chat */
-db.ref('privateCalls').on('child_added', snapRoom => {
-  const room = snapRoom.key;
-  // if it's for our current opened chat, watch calls inside it
-  if (room !== currentRoomId) return;
-  snapRoom.forEach(async callSnap => {
-    const callKey = callSnap.key;
-    const callData = callSnap.val();
-    if (!callData || !callData.offer) return;
-    // ignore if we created it
-    if (currentUser && callData.from === currentUser.uid) return;
-    // answer
-    await answerCall(room, callKey, callData);
-  });
+/* Accept / Reject incoming call (callee) */
+acceptBtn.addEventListener('click', async ()=>{
+  if (!incomingCall) return;
+  stopRingtone();
+  incomingModal.style.display = 'none';
+  const callKey = incomingCall.callKey;
+  const callRef = db.ref('privateCalls/'+incomingCall.roomId+'/'+callKey);
+  try {
+    // get local media (try video, fallback to audio)
+    try {
+      localStream = await navigator.mediaDevices.getUserMedia({ audio:true, video:true });
+    } catch(e) {
+      try { localStream = await navigator.mediaDevices.getUserMedia({ audio:true, video:false }); } catch(err){ throw err; }
+    }
+    // show local stream
+    localVideo.srcObject = localStream; localVideo.muted = true; await tryPlay(localVideo).catch(()=>{});
+    // create pc
+    pc = new RTCPeerConnection(rtcConfig);
+    remoteStream = new MediaStream();
+    remoteVideo.srcObject = remoteStream; remoteVideo.muted = false;
+    localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+    pc.ontrack = event => {
+      if (event.streams && event.streams[0]) event.streams[0].getTracks().forEach(t => remoteStream.addTrack(t));
+      else if (event.track) remoteStream.addTrack(event.track);
+      tryPlay(remoteVideo).catch(()=>{});
+    };
+    pc.onicecandidate = e => {
+      if (e.candidate) callRef.child('candidates').push({ candidate: e.candidate.toJSON(), from: currentUser.uid });
+    };
+    // set remote (offer)
+    const offer = incomingCall.offer;
+    await pc.setRemoteDescription(new RTCSessionDescription(offer));
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    // write answer
+    await callRef.update({ answer: answer.toJSON(), answeredBy: currentUser.uid, answeredAt: Date.now() });
+    // listen for candidate
+    callRef.child('candidates').on('child_added', snap => {
+      const c = snap.val();
+      if (!c) return;
+      if (c.from === currentUser.uid) return;
+      try { pc.addIceCandidate(new RTCIceCandidate(c.candidate)).catch(()=>{}); } catch(e){ console.warn(e); }
+    });
+    // system message: connected
+    await db.ref('privateMessages/'+currentRoomId).push({ type:'call', action:'connected', from: currentUser.uid, note: 'Answered', ts: Date.now() });
+    callCard.style.display = 'flex'; callTitle.textContent = 'In call: ' + (selectedUser ? (selectedUser.displayName||selectedUser.email) : ''); 
+    callStatus.textContent = 'Connected';
+    // track current callRef so hangup removes it if needed
+    outgoingCallRef = callRef;
+    // clear incomingCall
+    incomingCall = null;
+  } catch(e) {
+    console.error('Answer failed', e);
+    alert('Could not access media or answer call: '+e.message);
+  }
 });
 
-/* When switching chat, re-setup listener for incoming calls by room (handled above as DB child_added) */
-
-async function answerCall(roomId, callKey, callData){
-  // create local media
+rejectBtn.addEventListener('click', async ()=>{
+  if (!incomingCall) { incomingModal.style.display='none'; stopRingtone(); return; }
   try {
-    localStream = await navigator.mediaDevices.getUserMedia({ audio:true, video:true }).catch(()=>navigator.mediaDevices.getUserMedia({audio:true,video:false}));
-  } catch(e){ console.warn('Media error', e); return; }
-  localVideo.srcObject = localStream;
-  pc = new RTCPeerConnection(rtcConfig);
-  remoteStream = new MediaStream();
-  remoteVideo.srcObject = remoteStream;
-  localStream.getTracks().forEach(t=>pc.addTrack(t, localStream));
-  pc.ontrack = e => e.streams[0].getTracks().forEach(track => remoteStream.addTrack(track));
-  pc.onicecandidate = e => {
-    if (e.candidate) {
-      db.ref('privateCalls/'+roomId+'/'+callKey+'/candidates').push({ candidate: e.candidate.toJSON(), from: currentUser.uid });
+    await db.ref('privateCalls/'+incomingCall.roomId + '/' + incomingCall.callKey).update({ rejectedBy: currentUser.uid, rejectedAt: Date.now() });
+  } catch(e){ console.warn('Reject update failed', e); }
+  incomingModal.style.display = 'none';
+  stopRingtone();
+  await db.ref('privateMessages/'+currentRoomId).push({ type:'call', action:'rejected', from: currentUser.uid, note: 'Rejected', ts: Date.now() });
+  incomingCall = null;
+});
+
+/* Hangup */
+hangupBtn.addEventListener('click', hangup);
+async function hangup(){
+  try {
+    if (pc) { pc.close(); pc = null; }
+  } catch(e){}
+  try {
+    if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+  } catch(e){}
+  try {
+    if (remoteStream) { remoteStream.getTracks().forEach(t => t.stop()); remoteStream = null; }
+  } catch(e){}
+  try {
+    if (outgoingCallRef) {
+      // notify remote and remove the call node
+      await outgoingCallRef.remove().catch(()=>{});
+      outgoingCallRef = null;
     }
-  };
-  // set remote desc
-  await pc.setRemoteDescription(new RTCSessionDescription(callData.offer));
-  const answer = await pc.createAnswer();
-  await pc.setLocalDescription(answer);
-  // write answer
-  await db.ref('privateCalls/'+roomId+'/'+callKey).update({ answer: answer.toJSON(), answeredBy: currentUser.uid });
-  // listen for candidates
-  db.ref('privateCalls/'+roomId+'/'+callKey+'/candidates').on('child_added', snap=>{
-    const c = snap.val();
-    if (c && c.candidate && c.from !== currentUser.uid) pc.addIceCandidate(new RTCIceCandidate(c.candidate)).catch(()=>{});
-  });
-  callCard.style.display = 'flex';
-  callTitle.textContent = 'In call: '+(selectedUser? (selectedUser.displayName||selectedUser.email) : roomId);
-}
-
-/* hangup & cleanup */
-function hangup(){
-  if (pc) { pc.close(); pc = null; }
-  if (localStream) { localStream.getTracks().forEach(t=>t.stop()); localStream = null; }
-  if (remoteStream) { remoteStream.getTracks().forEach(t=>t.stop()); remoteStream = null; }
-  if (callRef) { callRef.remove().catch(()=>{}); callRef.off(); callRef = null; }
+  } catch(e){ console.warn(e); }
   callCard.style.display = 'none';
-  localVideo.srcObject = null; remoteVideo.srcObject = null;
+  callTitle.textContent = 'Call';
+  callStatus.textContent = '';
+  localVideo.srcObject = null;
+  remoteVideo.srcObject = null;
+  incomingCall = null;
+  stopRingtone();
+  try { await db.ref('privateMessages/'+currentRoomId).push({ type:'call', action:'ended', from: currentUser ? currentUser.uid : 'anon', note: 'Ended', ts: Date.now() }); } catch(e){}
 }
 
-/* Remove stale calls periodically (optional) */
+/* ---------- Ringtone (WebAudio) & autoplay helper ---------- */
+function ensureAudioContext(){
+  if (!audioContext) {
+    try {
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    } catch(e){ audioContext = null; }
+  }
+  return audioContext;
+}
+function startRingtone(){
+  const ac = ensureAudioContext();
+  if (!ac) return;
+  try { ac.resume(); } catch(e){}
+  stopRingtone();
+  ringOsc = ac.createOscillator();
+  ringGain = ac.createGain();
+  ringOsc.type = 'sine';
+  ringOsc.frequency.value = 440;
+  ringGain.gain.value = 0.05;
+  ringOsc.connect(ringGain); ringGain.connect(ac.destination);
+  ringOsc.start();
+  // ring pattern: alternate on/off using setInterval
+  let on = true;
+  ringOsc._pattern = setInterval(()=>{
+    on = !on;
+    ringGain.gain.value = on ? 0.05 : 0.0;
+  }, 500);
+}
+function stopRingtone(){
+  try {
+    if (ringOsc) {
+      clearInterval(ringOsc._pattern); ringOsc._pattern = null;
+      ringOsc.stop(); ringOsc.disconnect(); ringOsc = null;
+    }
+    if (ringGain) { ringGain.disconnect(); ringGain = null; }
+  } catch(e){ console.warn(e); }
+}
+
+/* Banner to enable audio if autoplay blocked */
+async function tryPlay(videoEl){
+  try {
+    const p = videoEl.play();
+    if (p !== undefined) await p;
+    // if successful, autoplay allowed
+    autoplayAllowed = true;
+    enableAudioBanner.style.display = 'none';
+  } catch(e){
+    // blocked -> show banner so user can click to enable
+    enableAudioBanner.style.display = 'block';
+    console.warn('Autoplay blocked:', e);
+    throw e;
+  }
+}
+enableAudioBanner.addEventListener('click', async ()=>{
+  const ac = ensureAudioContext();
+  if (ac) {
+    try {
+      await ac.resume();
+      autoplayAllowed = true;
+      enableAudioBanner.style.display = 'none';
+      // try to play any attached videos
+      if (localVideo.srcObject) tryPlay(localVideo).catch(()=>{});
+      if (remoteVideo.srcObject) tryPlay(remoteVideo).catch(()=>{});
+    } catch(e){ console.warn('Audio resume failed', e); }
+  } else {
+    alert('Your browser does not support WebAudio resume. Interact with the page and retry the call.');
+  }
+});
+
+/* ---------- Call cleanup on remote changes (rejections/hangups) ---------- */
+/* Monitor privateCalls for changes in current room to detect remote hangup / reject when we are caller */
+function watchOutgoingCallRef(callRef){
+  if (!callRef) return;
+  callRef.on('value', snap => {
+    const v = snap.val() || {};
+    if (v.rejectedBy) {
+      showSystem('Call rejected');
+      hangup(); // cleanup
+    }
+    if (v.hangupBy) {
+      showSystem('Call ended');
+      hangup();
+    }
+  });
+}
+
+/* ---------- Remove stale calls / housekeeping ---------- */
 setInterval(async ()=>{
   const calls = await db.ref('privateCalls').once('value');
   calls.forEach(roomSnap=>{
     roomSnap.forEach(callSnap=>{
       const v = callSnap.val();
-      if (v && v.ts && Date.now()-v.ts > 1000*60*30) callSnap.ref.remove();
+      if (v && v.ts && Date.now() - v.ts > 1000*60*30) callSnap.ref.remove();
     });
   });
 }, 1000*60*10);
 
-/* ---------- Utilities ---------- */
-function escapeHtml(s){ return (s||'').toString().replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
-
-/* Basic presence update every 60s */
+/* ---------- Presence ---------- */
 setInterval(()=> {
   if (currentUser) db.ref('users/'+currentUser.uid).update({ lastSeen: Date.now() });
 }, 60000);
 
-/* Auto close modals on outside click */
-document.querySelectorAll('.modal').forEach(mod => mod.addEventListener('click', e => { if (e.target===mod) mod.style.display='none' }));
+/* ---------- Incoming call cancellation if removed (caller canceled) ---------- */
+/* If someone created an incoming call then removed it (caller canceled), ensure modal hides */
+setInterval(()=> {
+  if (!incomingCall) return;
+  db.ref('privateCalls/'+incomingCall.roomId+'/'+incomingCall.callKey).once('value').then(snap=>{
+    if (!snap.exists()) {
+      incomingModal.style.display = 'none';
+      stopRingtone();
+      incomingCall = null;
+    }
+  }).catch(()=>{});
+}, 2000);
 
-/* Initial log */
-console.log('XDARK private chat initialized');
+/* ---------- Auto-close modals on outside click ---------- */
+document.querySelectorAll('.modal').forEach(mod => mod.addEventListener('click', e => { if (e.target === mod) mod.style.display = 'none'; }));
+
+/* ---------- Initial console log ---------- */
+console.log('XDARK single-file loaded — ready.');
 </script>
 
 </body>
